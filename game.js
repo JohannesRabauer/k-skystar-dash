@@ -26,13 +26,38 @@ function resetGame() {
     generate();
 }
 
+function maxJumpDist(heightDiff) {
+    // heightDiff > 0 means target is higher; calculate max gap the player can cross
+    const vy0 = -JUMP; // positive upward speed
+    const g = GRAVITY;
+    // time to reach heightDiff above start: solve 0.5*g*t^2 - vy0*t + heightDiff = 0
+    // for landing below (heightDiff < 0) we use full parabola
+    const disc = vy0*vy0 - 2*g*heightDiff;
+    if (disc < 0) return 0; // unreachable height
+    const t = (vy0 + Math.sqrt(disc)) / g;
+    return t * speed;
+}
+
 function generate() {
     while (true) {
         const last = buildings[buildings.length - 1];
-        const gap = 60 + Math.random()*90 + (speed - BASE_SPEED)*8;
+        // max gap at 80% of theoretical max (leaves room for error but always possible)
+        const maxGap = maxJumpDist(0) * 0.75;
+        const minGap = Math.min(40 + (speed - BASE_SPEED)*5, maxGap * 0.3);
+        const gap = minGap + Math.random() * (maxGap - minGap);
         const nextX = last.x + last.w + gap;
         if (nextX > canvas.width + 200) break;
-        const b = {x: nextX, w: 80 + Math.random()*120, h: 200 + Math.random()*150};
+        // constrain height: new building can be higher, but must be reachable
+        const maxClimb = maxJumpDist(0) > gap ? Math.floor((-JUMP)*(-JUMP) / (2*GRAVITY) * 0.7) : 0;
+        const heightVar = 60 + Math.random() * 90;
+        const newH = last.h + (Math.random() < 0.5 ? heightVar : -heightVar);
+        const b = {x: nextX, w: 80 + Math.random()*120, h: Math.max(120, Math.min(350, newH))};
+        // verify jump is possible: height diff from last roof to this roof
+        const climb = b.h - last.h; // positive = target is higher
+        if (climb > 0 && gap > maxJumpDist(climb) * 0.85) {
+            // too hard, lower the building
+            b.h = last.h + Math.min(maxClimb, climb);
+        }
         buildings.push(b);
         if (Math.random() < 0.7) {
             stars.push({x: b.x + 20 + Math.random()*(b.w-40), y: canvas.height - b.h - 25, r: 12, collected: false});
